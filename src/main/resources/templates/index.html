@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Tic Tac Toe</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <style>
+        table { border-collapse: collapse; margin: 50px auto; }
+        td { border: 1px solid black; width: 60px; height: 60px; text-align: center; font-size: 40px; cursor: pointer; }
+        #status { text-align: center; font-size: 24px; margin: 20px; }
+        button { width: 60px; height:60px; padding:0px;}
+    </style>
+</head>
+<body>
+<div id="status">Connecting...</div>
+<table>
+    <tbody>
+    <tr>
+        <td><button id="cell-0-0"></button></td>
+        <td><button id="cell-0-1"></button></td>
+        <td><button id="cell-0-2-btn"></button></td>
+    </tr>
+    <tr>
+        <td><button id="cell-1-0"></button></td>
+        <td><button id="cell-1-1"></button></td>
+        <td><button id="cell-1-2-btn"></button></td>
+    </tr>
+    <tr>
+        <td><button id="cell-2-0"></button></td>
+        <td><button id="cell-2-1"></button></td>
+        <td><button id="cell-2-2-btn"></button></td>
+    </tr>
+    </tbody>
+</table>
+
+
+<script>
+    var stompClient = null;
+    var player = null; // "X" or "O"
+    var gameEnded = false;
+
+    function connect() {
+        var socket = new SockJS('/tic-tac-toe-websocket');
+        stompClient = Stomp.over(socket);
+        stompClient.connect({}, function (frame) {
+            document.getElementById('status').innerText = 'Connected. Waiting for your move...';
+            // Join game: assign player as "X" or "O" based on connection order (simplified here)
+            if (!player) {
+                player = "X"; // For demo, all clients are "X" or implement logic elsewhere
+            }
+            stompClient.subscribe('/topic/game', function (message) {
+                var game = JSON.parse(message.body);
+                updateBoard(game);
+            });
+        });
+    }
+
+    function updateBoard(game) {
+        gameEnded = game.gameEnded;
+        for (var i = 0; i < 3; i++) {
+            for (var j = 0; j < 3; j++) {
+                var cell = document.getElementById('cell-' + i + '-' + j);
+                cell.innerText = game.board[i][j] || '';
+            }
+        }
+        var status = '';
+        if (game.gameEnded) {
+            if (game.winner) {
+                status = (game.winner === player) ? 'You win!' : 'You lose...';
+            } else {
+                status = 'Draw!';
+            }
+        } else {
+            status = (game.currentPlayer === player) ? 'Your turn' : "Opponent's turn";
+        }
+        document.getElementById('status').innerText = status;
+    }
+
+    function sendMove(x, y) {
+        if (gameEnded) return;
+        stompClient.send("/app/move", {}, JSON.stringify({"x": x, "y": y, "player": player}));
+    }
+
+    function setupCells() {
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 3; j++) {
+                let cell = document.getElementById('cell-' + i + '-' + j);
+                cell.onclick = function() {
+                    if (cell.innerText === '' && !gameEnded) {
+                        sendMove(i, j);
+                    }
+                }
+            }
+        }
+    }
+
+    window.onload = function() {
+        connect();
+        setupCells();
+    }
+</script>
+</body>
+</html>
